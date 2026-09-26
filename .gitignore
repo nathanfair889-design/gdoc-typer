@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Local settings written by the app at runtime
+settings.json
