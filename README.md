@@ -11,7 +11,16 @@ Python 3 with tkinter is all it needs.
 
 ## Running it
 
-Double-click **`Start Typer.bat`**, or:
+**Add it to the Start Menu** so you can just search for it:
+
+```
+powershell -ExecutionPolicy Bypass -File install_shortcut.ps1
+```
+
+Then press Start and type "Google Doc Typer". It launches without a console
+window. Pass `-Uninstall` to the same script to remove the entry.
+
+Otherwise, double-click **`Start Typer.bat`**, or:
 
 ```bash
 python typer_app.py
@@ -162,6 +171,8 @@ Hunt and peck, Fix everything inline, Clean (no mistakes).
 | `writing_profile.py` | Learns a profile from a Docs revision changelog |
 | `theme.py` | Dark palette and ttk styling |
 | `winkeys.py` | Windows `SendInput` keystroke injection |
+| `install_shortcut.ps1` | Adds a searchable Start Menu entry |
+| `typer.ico` | App icon |
 | `settings.json` | Saved settings (created on first save) |
 | `writing_profile.json` | Your learned profile (gitignored) |
 

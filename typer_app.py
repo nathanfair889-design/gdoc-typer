@@ -337,6 +337,7 @@ class App(ttk.Frame):
         except OSError:
             pass
         self.preset.set("")
+        self.save_settings()      # so the learned numbers survive a restart too
         self.set_status(f"Learned from your writing: {writing_profile.summary(profile)} "
                         f"({len(applied)} settings updated).")
 
@@ -508,6 +509,12 @@ def main():
     root = tk.Tk()
     root.title(APP_TITLE)
     root.minsize(900, 560)
+    icon = os.path.join(HERE, "typer.ico")
+    if os.path.exists(icon):
+        try:
+            root.iconbitmap(default=icon)
+        except tk.TclError:
+            pass
     theme.apply(root)
     try:
         root.call("tk", "scaling", 1.3)
