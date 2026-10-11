@@ -50,9 +50,34 @@ instead of by the simulated typist.
 | Dropped letter | `documnt` |
 | Common misspelling | `recieve`, `definately`, `seperate`, `thier` (~90 words) |
 
-Each mistake gets noticed on its own schedule — immediately, at the end of the
-word, or a few words later — then backspaced out and retyped, with a short
-hesitation before the correction starts. A small share can be left in
+## Revision passes
+
+By default most mistakes are **not** fixed where you made them. The typist
+writes one to three sentences, pauses as if re-reading, then arrows the caret
+back to the earliest typo, fixes it, works forward through the rest, and
+arrows back to the end to carry on. That is how most people actually write,
+and it reads far more human than fixing everything at the caret.
+
+Controlled on the **Revision** tab:
+
+- **Left for a later revision pass (%)** — 0 fixes everything inline the
+  moment you make it, 100 saves every mistake for a pass. Default 60.
+- **Go back after this many sentences** — min/max, default 1 to 3.
+- **Arrow-key speed**, and the pauses before going back and at each mistake.
+
+Navigation is arrow keys only — never Ctrl+arrow word jumps, and never the
+mouse. Arrow keys move exactly one character in every editor, so the planner
+always knows where the caret is. Word jumping has editor-specific boundary
+rules and would eventually land in the wrong place and scramble the document.
+
+This assumes **you are typing at the end of your document** and do not touch
+the keyboard or mouse mid-run. The caret is tracked by arithmetic, not read
+back from the document, so moving the cursor yourself will corrupt the text.
+Press Esc if you need to intervene.
+
+Each mistake that is fixed *inline* gets noticed on its own schedule —
+immediately, at the end of the word, or a few words later — then backspaced
+out and retyped, with a short hesitation first. A small share can be left in
 uncorrected, which is what real typing looks like.
 
 ## Settings
@@ -67,12 +92,15 @@ before typing starts.
 **Mistakes** — typos per 100 characters, share of capitals mistyped, stray
 capitals, and how often a misspell-prone word comes out wrong.
 
-**Corrections** — the weights for noticed-immediately / at-end-of-word /
-a-few-words-later, the share left uncorrected, and the hesitation before
-fixing.
+**Revision** — how much is saved for a later pass, how often to go back,
+and the arrow-key and pause timings for it.
 
-Presets: Careful writer, Average typist, Fast and sloppy, Hunt and peck,
-Clean (no mistakes).
+**Inline fixes** — for mistakes *not* saved for a pass: the weights for
+noticed-immediately / at-end-of-word / a-few-words-later, and the hesitation
+before fixing.
+
+Presets: Write then revise, Careful writer, Average typist, Fast and sloppy,
+Hunt and peck, Fix everything inline, Clean (no mistakes).
 
 ## Buttons worth knowing
 

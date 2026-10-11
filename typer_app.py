@@ -130,8 +130,12 @@ class Typist(threading.Thread):
                 try:
                     if kind == "char":
                         winkeys.type_char(value)
-                    else:
+                    elif kind == "back":
                         winkeys.backspace()
+                    elif kind == "left":
+                        winkeys.arrow_left()
+                    elif kind == "right":
+                        winkeys.arrow_right()
                 except OSError as exc:
                     self.post("done", reason="error", detail=str(exc))
                     return
@@ -277,7 +281,10 @@ class App(ttk.Frame):
                        ("paragraph_pause_min", "paragraph_pause_max"),
                        ("comma_pause_min", "comma_pause_max"),
                        ("think_min", "think_max"),
-                       ("notice_min", "notice_max")):
+                       ("notice_min", "notice_max"),
+                       ("revise_every_min", "revise_every_max"),
+                       ("reread_min", "reread_max"),
+                       ("spot_min", "spot_max")):
             if getattr(cfg, lo) > getattr(cfg, hi):
                 setattr(cfg, hi, getattr(cfg, lo))
         return cfg
@@ -354,8 +361,8 @@ class App(ttk.Frame):
         self.set_status(
             f"About {engine.format_duration(st.duration)} to type "
             f"{st.chars} characters - {st.keystrokes} keystrokes, "
-            f"{st.mistakes} mistakes, {st.corrections} corrections, "
-            f"{st.backspaces} backspaces.")
+            f"{st.mistakes} mistakes, {st.revisions} revision passes, "
+            f"{st.backspaces} backspaces, {st.arrows} arrow presses.")
 
     def dry_run(self):
         result = self._plan()
@@ -368,8 +375,9 @@ class App(ttk.Frame):
         self.preview.configure(state="disabled")
         exact = st.result_text == engine.normalise(self.source_text())
         self.set_status(
-            f"Dry run: {st.mistakes} mistakes, {st.corrections} corrections, "
-            f"{st.backspaces} backspaces, ~{engine.format_duration(st.duration)}. "
+            f"Dry run: {st.mistakes} mistakes, {st.corrections} corrections "
+            f"over {st.revisions} revision passes, {st.backspaces} backspaces, "
+            f"{st.arrows} arrow presses, ~{engine.format_duration(st.duration)}. "
             + ("Final text matches your input." if exact
                else "Some mistakes were left in on purpose."))
 

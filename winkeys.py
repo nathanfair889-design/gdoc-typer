@@ -19,6 +19,12 @@ VK_BACK = 0x08
 VK_TAB = 0x09
 VK_RETURN = 0x0D
 VK_ESCAPE = 0x1B
+VK_END = 0x23
+VK_HOME = 0x24
+VK_LEFT = 0x25
+VK_UP = 0x26
+VK_RIGHT = 0x27
+VK_DOWN = 0x28
 
 ULONG_PTR = wintypes.WPARAM
 
@@ -104,6 +110,14 @@ def type_char(ch):
 
 def backspace():
     send_vk(VK_BACK)
+
+
+def arrow_left():
+    send_vk(VK_LEFT)
+
+
+def arrow_right():
+    send_vk(VK_RIGHT)
 
 
 def is_escape_down():
