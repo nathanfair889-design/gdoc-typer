@@ -80,6 +80,40 @@ immediately, at the end of the word, or a few words later — then backspaced
 out and retyped, with a short hesitation first. A small share can be left in
 uncorrected, which is what real typing looks like.
 
+## Learn how you actually write
+
+Instead of guessing at the sliders, the app can measure them from a document
+you really typed. Google Docs keeps an operational-transform log of every
+edit ever made to a file. It is not in the public Drive API, but the editor's
+own endpoint returns it:
+
+```
+https://docs.google.com/document/d/DOC_ID/revisions/load?start=1&end=5000&id=DOC_ID
+```
+
+1. Open that URL in a browser where you are signed in, with your doc's ID in
+   both slots. Pick a long document you typed yourself; one that was mostly
+   pasted in has no typing to learn from.
+2. Save the response to a file. It begins with a `)]}'` guard prefix, which
+   the parser strips.
+3. In the app, click **Learn from my Google Doc history...** and pick it.
+
+Replaying that log recovers not just the text but how it was written. From it
+the app sets your speed, your sentence and comma pauses, your typo rate, how
+much you fix on the spot versus going back later, and how long you hesitate
+before fixing. It also extracts the words **you personally** get wrong and
+merges them into the misspelling list, so the typist makes your mistakes
+rather than generic ones.
+
+The learned profile is written to `writing_profile.json` and reloaded on
+startup. It is gitignored, being personal data.
+
+**What this cannot recover:** Docs batches edits into roughly 200-400ms
+groups, so average speed and pause structure are solid, but true
+per-keystroke jitter is not in the data. If the endpoint rejects your range,
+`end` is higher than your revision count — lower it, or read the exact
+request off the Network tab while opening File > Version history.
+
 ## Settings
 
 **Speed** — words per minute, per-keystroke randomness, drift (speed wanders
@@ -125,9 +159,11 @@ Hunt and peck, Fix everything inline, Clean (no mistakes).
 | --- | --- |
 | `typer_app.py` | GUI and the thread that replays keystrokes |
 | `engine.py` | Timing, mistakes and correction planning |
+| `writing_profile.py` | Learns a profile from a Docs revision changelog |
 | `theme.py` | Dark palette and ttk styling |
 | `winkeys.py` | Windows `SendInput` keystroke injection |
 | `settings.json` | Saved settings (created on first save) |
+| `writing_profile.json` | Your learned profile (gitignored) |
 
 ## Notes
 

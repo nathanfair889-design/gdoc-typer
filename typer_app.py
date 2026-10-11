@@ -18,10 +18,12 @@ from tkinter import filedialog, messagebox, ttk
 import engine
 import theme
 import winkeys
+import writing_profile
 
 APP_TITLE = "Google Doc Typer"
 HERE = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_PATH = os.path.join(HERE, "settings.json")
+PROFILE_PATH = os.path.join(HERE, "writing_profile.json")
 
 SAMPLE = (
     "The quarterly review is due tomorrow. I want to separate the budget "
@@ -166,6 +168,7 @@ class App(ttk.Frame):
 
         self._build()
         self.load_settings()
+        self.load_profile_if_saved()
         self.root.after(80, self._drain)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -231,6 +234,12 @@ class App(ttk.Frame):
         self.preset.set("Average typist")
         self.preset.pack(side="left", padx=6)
         self.preset.bind("<<ComboboxSelected>>", self.apply_preset)
+
+        ttk.Button(right, text="Learn from my Google Doc history...",
+                   command=self.learn_profile).pack(fill="x", pady=(0, 6))
+        self.profile_label = ttk.Label(right, text="No writing profile loaded.",
+                                       style="Muted.TLabel", wraplength=250)
+        self.profile_label.pack(fill="x", pady=(0, 6))
 
         book = ttk.Notebook(right)
         book.pack(fill="both", expand=True)
@@ -303,6 +312,53 @@ class App(ttk.Frame):
         cfg.seed = self.seed.get()
         self.set_config(cfg)
         self.set_status(f"Preset applied: {self.preset.get()}")
+
+    def learn_profile(self):
+        """Read a saved Docs revisions/load response and copy what it shows."""
+        path = filedialog.askopenfilename(
+            title="Open a saved Google Docs revision changelog",
+            filetypes=[("Changelog", "*.json *.txt"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            profile = writing_profile.analyse(path)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            messagebox.showerror(
+                APP_TITLE, "Could not read that file.\n\n" + str(exc))
+            return
+
+        cfg = self.get_config()
+        applied = writing_profile.apply_to_config(profile, cfg)
+        self.set_config(cfg)
+        self._install_misspellings(profile)
+        try:
+            with open(PROFILE_PATH, "w", encoding="utf-8") as fh:
+                json.dump(profile, fh, indent=2)
+        except OSError:
+            pass
+        self.preset.set("")
+        self.set_status(f"Learned from your writing: {writing_profile.summary(profile)} "
+                        f"({len(applied)} settings updated).")
+
+    def _install_misspellings(self, profile):
+        words = profile.get("misspellings") or {}
+        if words:
+            total = engine.use_misspellings(words)
+            self.profile_label.configure(
+                text=f"Profile: {len(words)} of your own misspellings "
+                     f"({total} words total).")
+        else:
+            self.profile_label.configure(
+                text="Profile loaded, but no misspellings found in it.")
+
+    def load_profile_if_saved(self):
+        if not os.path.exists(PROFILE_PATH):
+            return
+        try:
+            with open(PROFILE_PATH, encoding="utf-8") as fh:
+                self._install_misspellings(json.load(fh))
+        except (OSError, ValueError):
+            pass
 
     def load_settings(self):
         cfg = engine.Config()

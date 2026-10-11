@@ -7,3 +7,6 @@ venv/
 
 # Local settings written by the app at runtime
 settings.json
+
+# Learned writing profile (personal data)
+writing_profile.json

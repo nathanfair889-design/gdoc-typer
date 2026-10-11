@@ -92,6 +92,23 @@ MISSPELLINGS = {
 }
 
 
+# Swapped for your own list once a writing profile is learned. Your real
+# slips beat any generic list, but the built-ins still cover words your
+# sample never happened to contain.
+ACTIVE_MISSPELLINGS = dict(MISSPELLINGS)
+
+
+def use_misspellings(personal, replace=False):
+    """Merge a learned misspelling list in (or replace the built-ins)."""
+    global ACTIVE_MISSPELLINGS
+    ACTIVE_MISSPELLINGS = dict(personal) if replace else {**MISSPELLINGS, **personal}
+    return len(ACTIVE_MISSPELLINGS)
+
+
+def reset_misspellings():
+    global ACTIVE_MISSPELLINGS
+    ACTIVE_MISSPELLINGS = dict(MISSPELLINGS)
+
 # --------------------------------------------------------------------------
 # configuration
 # --------------------------------------------------------------------------
@@ -296,10 +313,11 @@ def _pick_mistake(text, i, cfg, rng, at_sentence_start, at_word_start):
     # whole-word misspelling
     if at_word_start and cfg.word_typo_pct > 0:
         m = WORD_RE.match(text, i)
-        if (m and m.group(0).lower() in MISSPELLINGS
+        if (m and m.group(0).lower() in ACTIVE_MISSPELLINGS
                 and rng.random() * 100.0 < cfg.word_typo_pct):
             word = m.group(0)
-            wrong = _match_case(word, rng.choice(MISSPELLINGS[word.lower()]))
+            wrong = _match_case(word,
+                                rng.choice(ACTIVE_MISSPELLINGS[word.lower()]))
             return {"wrong": wrong, "consumed": len(word), "correct": word,
                     "kind": "misspelling"}
 
