@@ -158,6 +158,9 @@ class Config:
     spot_min: float = 0.20
     spot_max: float = 0.80
 
+    # rewrites - change your mind about wording, not just fix typos
+    rewrite_pct: float = 0.0            # share of sentences first typed as a draft
+
     # sessions - write in bursts with real gaps, the way people actually do
     session_minutes: float = 0.0        # 0 disables breaks entirely
     break_minutes_min: float = 5.0
@@ -195,6 +198,7 @@ NUMERIC_SPEC = [
         ("cap_error_pct", "Capital letters mistyped (%)", 0, 100, 0.5),
         ("stuck_shift_pct", "Stray capitals on lowercase words (%)", 0, 20, 0.1),
         ("word_typo_pct", "Misspell-prone words got wrong (%)", 0, 100, 0.5),
+        ("rewrite_pct", "Sentences first typed as a rougher draft (%)", 0, 100, 1),
         ("uncorrected_pct", "Never fixed at all (%)", 0, 100, 0.5),
     ]),
     ("Revision", [
@@ -283,6 +287,7 @@ class Stats:
     mistakes: int = 0
     corrections: int = 0
     revisions: int = 0
+    rewrites: int = 0
     breaks: int = 0
     duration: float = 0.0
     result_text: str = ""
@@ -369,9 +374,15 @@ def _pick_mistake(text, i, cfg, rng, at_sentence_start, at_word_start):
     return None
 
 
-def build_plan(text, cfg):
-    """Return (events, stats). Each event is (delay_seconds, kind, value)."""
+def build_plan(text, cfg, rewrites=None):
+    """Return (events, stats). Each event is (delay, kind, value, source_index).
+
+    `rewrites` maps a character index in `text` to (draft_text, final_length):
+    the sentence is typed as `draft_text` first, then swapped for the real
+    thing on a later revision pass - a change of mind rather than a typo.
+    """
     rng = random.Random(cfg.seed.strip() or None)
+    rewrites = dict(rewrites or {})
     text = normalise(text)
     n = len(text)
 
@@ -530,6 +541,22 @@ def build_plan(text, cfg):
 
         if at_word_start and cfg.drift > 0:
             speed = min(1.35, max(0.72, speed * rng.lognormvariate(0.0, cfg.drift)))
+
+        # ---- a sentence typed as an earlier draft, fixed up later ----
+        if pending is None and i in rewrites:
+            draft, length = rewrites.pop(i)
+            final = text[i:i + length]
+            if final and draft:
+                start = caret
+                for c in draft:
+                    emit_char(c)
+                i += length
+                stats.chars += length
+                stats.rewrites += 1
+                # always deferred: nobody rewrites a sentence while typing it
+                deferred.append({"start": start, "wrong_len": len(draft),
+                                 "correct": final})
+                continue
 
         # ---- mistakes ----
         mistake = None

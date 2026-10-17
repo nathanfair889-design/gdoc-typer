@@ -15,7 +15,9 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+import apikey
 import engine
+import rewriter
 import theme
 import winkeys
 import writing_profile
@@ -27,6 +29,12 @@ PROFILE_PATH = os.path.join(HERE, "writing_profile.json")
 
 HOTKEY_START = 1
 HOTKEY_PAUSE = 2
+
+REWRITE_BACKENDS = ["Off", "Rule-based (free, offline)", "Claude API"]
+REWRITE_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]
+# dollars per million tokens, for the cost note after a call
+MODEL_RATES = {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0),
+               "claude-haiku-5-5": (0.10, 0.50)}
 
 SAMPLE = (
     "The quarterly review is due tomorrow. I want to separate the budget "
@@ -334,6 +342,7 @@ class App(ttk.Frame):
         self.plan = None
         self.resume_at = 0            # where an interrupted run stopped
         self.replay = None            # the live preview, when one is playing
+        self.last_cost_note = ""
 
         # one message-loop thread hosts both the input hooks and the hotkeys
         self.watcher = winkeys.InputWatcher(
@@ -449,6 +458,28 @@ class App(ttk.Frame):
                 ttk.Spinbox(tab, from_=lo, to=hi, increment=step, width=8,
                             textvariable=var).grid(row=r, column=1, sticky="e", padx=(8, 0))
             tab.columnconfigure(0, weight=1)
+
+        rewrites = ttk.LabelFrame(right, text="Rewrites (changing your mind)",
+                                  padding=8)
+        rewrites.pack(fill="x", pady=(8, 0))
+        ttk.Label(rewrites, text="Draft generator").grid(row=0, column=0, sticky="w")
+        self.rewrite_backend = ttk.Combobox(rewrites, values=REWRITE_BACKENDS,
+                                            state="readonly", width=24)
+        self.rewrite_backend.set(REWRITE_BACKENDS[0])
+        self.rewrite_backend.grid(row=1, column=0, sticky="ew", pady=(2, 6))
+        ttk.Label(rewrites, text="Model (Claude only)").grid(row=2, column=0,
+                                                             sticky="w")
+        self.rewrite_model = ttk.Combobox(rewrites, values=REWRITE_MODELS,
+                                          state="readonly", width=24)
+        self.rewrite_model.set(REWRITE_MODELS[0])
+        self.rewrite_model.grid(row=3, column=0, sticky="ew", pady=(2, 6))
+        ttk.Button(rewrites, text="Set API key...",
+                   command=self.set_api_key).grid(row=4, column=0, sticky="ew")
+        self.key_label = ttk.Label(rewrites, text="", style="Muted.TLabel",
+                                   wraplength=230)
+        self.key_label.grid(row=5, column=0, sticky="w", pady=(4, 0))
+        rewrites.columnconfigure(0, weight=1)
+        self._refresh_key_label()
 
         safety = ttk.LabelFrame(right, text="Safety and repeatability", padding=8)
         safety.pack(fill="x", pady=8)
@@ -598,12 +629,110 @@ class App(ttk.Frame):
         self.text.delete("1.0", "end")
         self.text.insert("1.0", content)
 
+    def _refresh_key_label(self):
+        """Describe the key without ever showing it."""
+        self.key_label.configure(text=apikey.describe())
+
+    def set_api_key(self):
+        """Store the key locally. It never leaves this machine."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("API key")
+        dialog.transient(self.root)
+        dialog.configure(background=theme.BG)
+        dialog.resizable(False, False)
+
+        frame = ttk.Frame(dialog, padding=12)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text="Paste your Anthropic API key",
+                  style="Heading.TLabel").pack(anchor="w")
+        ttk.Label(frame, style="Muted.TLabel", wraplength=380,
+                  text=("Stored at " + apikey.key_path() + " - outside this "
+                        "project, so it can never be committed. It is not "
+                        "shown again after saving.")).pack(anchor="w", pady=(4, 8))
+        entry = ttk.Entry(frame, show="*", width=52)
+        entry.pack(fill="x")
+        entry.focus_set()
+
+        row = ttk.Frame(frame)
+        row.pack(fill="x", pady=(10, 0))
+
+        def save():
+            value = entry.get().strip()
+            entry.delete(0, "end")
+            if value:
+                apikey.save_key(value)
+            dialog.destroy()
+            self._refresh_key_label()
+            self.set_status("API key saved outside the project folder.")
+
+        def forget():
+            apikey.forget_key()
+            entry.delete(0, "end")
+            dialog.destroy()
+            self._refresh_key_label()
+            self.set_status("Stored API key removed.")
+
+        ttk.Button(row, text="Save", command=save,
+                   style="Accent.TButton").pack(side="left")
+        ttk.Button(row, text="Cancel", command=dialog.destroy).pack(side="left",
+                                                                    padx=6)
+        ttk.Button(row, text="Forget stored key",
+                   command=forget).pack(side="right")
+        dialog.bind("<Return>", lambda _e: save())
+        dialog.bind("<Escape>", lambda _e: dialog.destroy())
+        dialog.grab_set()
+
+    def _make_rewrites(self, text, cfg):
+        """Build the {index: (draft, length)} map for this run, if enabled."""
+        backend = self.rewrite_backend.get()
+        if backend == REWRITE_BACKENDS[0] or cfg.rewrite_pct <= 0:
+            return {}
+        sentences = rewriter.find_sentences(text)
+        if not sentences:
+            return {}
+        wanted = max(1, round(len(sentences) * cfg.rewrite_pct / 100.0))
+
+        if backend == REWRITE_BACKENDS[1]:
+            seed = cfg.seed.strip() or None
+            return rewriter.RuleBased(seed).drafts(text, wanted)
+
+        key = apikey.load_key()
+        if not key:
+            messagebox.showwarning(
+                APP_TITLE,
+                "No API key is set, so no rewrites were generated.\n\n"
+                "Use 'Set API key...', or switch the draft generator to "
+                "Rule-based, which needs no key.")
+            return {}
+
+        model = self.rewrite_model.get()
+        self.set_status(f"Asking {model} for {wanted} earlier drafts...")
+        self.root.update_idletasks()
+        backend_obj = rewriter.Claude(key, model=model)
+        try:
+            drafts = backend_obj.drafts(text, wanted)
+        except Exception as exc:
+            messagebox.showerror(
+                APP_TITLE,
+                "Could not reach the API, so no rewrites were generated.\n\n"
+                + str(exc)[:300])
+            return {}
+        cost = backend_obj.estimate_cost()
+        self.last_cost_note = (
+            f" {len(drafts)} drafts from {model}"
+            + (f", about ${cost:.4f}." if cost is not None else ".")
+        )
+        return drafts
+
     def _plan(self, offset=0):
         text = engine.normalise(self.source_text())[offset:]
         if not text.strip():
             messagebox.showinfo(APP_TITLE, "There is no text left to type.")
             return None
-        return engine.build_plan(text, self.get_config())
+        cfg = self.get_config()
+        self.last_cost_note = ""
+        rewrites = self._make_rewrites(text, cfg)
+        return engine.build_plan(text, cfg, rewrites=rewrites)
 
     def estimate(self):
         result = self._plan()
@@ -651,12 +780,15 @@ class App(ttk.Frame):
         self.preview.insert("1.0", st.result_text)
         self.preview.configure(state="disabled")
         exact = st.result_text == engine.normalise(self.source_text())
+        rewrote = f"{st.rewrites} rewrites, " if st.rewrites else ""
         self.set_status(
+            rewrote +
             f"Dry run: {st.mistakes} mistakes, {st.corrections} corrections "
             f"over {st.revisions} revision passes, {st.backspaces} backspaces, "
             f"{st.arrows} arrow presses, ~{engine.format_duration(st.duration)}. "
             + ("Final text matches your input." if exact
-               else "Some mistakes were left in on purpose."))
+               else "Some mistakes were left in on purpose.")
+            + self.last_cost_note)
 
     def start(self, offset=0):
         if self.typist and self.typist.is_alive():

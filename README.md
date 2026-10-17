@@ -233,6 +233,43 @@ Hunt and peck, Fix everything inline, Clean (no mistakes).
 - The tool never types into its own window.
 - **Esc** stops a run immediately.
 
+## Rewrites: changing your mind
+
+Typos are mechanical. Real writing also contains *revision* — you write a
+sentence, move on, re-read it and replace it with a better one. On the
+**Rewrites** panel, a share of sentences get typed as a rougher earlier
+draft first, then swapped for the real text on a later revision pass.
+
+The direction is the opposite of every rewriting tool: the finished sentence
+already exists, so what has to be invented is the *worse* version that came
+before it. Two generators:
+
+- **Rule-based** — deterministic downgrades: drop a qualifier, lose an
+  opening connective, swap a precise verb for a vague one, contract
+  something. Free, offline, no key, no dependencies.
+- **Claude API** — asks for a plausible earlier draft of each sentence.
+  Better results, needs a key and the `anthropic` package.
+
+`Sentences first typed as a rougher draft (%)` on the **Mistakes** tab
+controls how many. Keep it low — rewriting every sentence is not what
+writing looks like. Rewrites are always deferred to a revision pass, never
+fixed inline, because nobody rewrites a sentence while still typing it.
+
+Example, rule-based:
+
+```
+FINAL: However, the committee demonstrates significant progress on the issue.
+DRAFT: The committee demonstrates big progress on the issue.
+```
+
+**Model and cost.** The default is `claude-opus-5-5`. A typical document
+costs around $0.02 on Opus, $0.01 on Sonnet, or $0.0005 on Haiku — pick
+from the dropdown. The dry-run line reports the actual cost after each call.
+
+**The key is never stored in this repo** — see the API keys section below.
+Use **Set API key...**, which writes it to `%APPDATA%` and never displays it
+again.
+
 ## API keys
 
 If an API-backed feature is ever enabled, **the key never goes in this
@@ -266,6 +303,7 @@ scraped within minutes, and the only real fix is making the key useless.
 | `typer_app.py` | GUI and the thread that replays keystrokes |
 | `engine.py` | Timing, mistakes and correction planning |
 | `writing_profile.py` | Learns a profile from a Docs revision changelog |
+| `rewriter.py` | Generates earlier drafts (rule-based or Claude) |
 | `theme.py` | Dark palette and ttk styling |
 | `winkeys.py` | Windows `SendInput` keystroke injection |
 | `apikey.py` | Reads the API key from outside the repo |
