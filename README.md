@@ -334,6 +334,7 @@ scraped within minutes, and the only real fix is making the key useless.
 | `apikey.py` | Reads the API key from outside the repo |
 | `.githooks/pre-commit` | Refuses commits containing credentials |
 | `install_hooks.py` | Enables that hook |
+| `TEMPLATE-GUIDE.md` | Step-by-step guide for the APUSH table template |
 | `install_shortcut.ps1` | Adds a searchable Start Menu entry |
 | `typer.ico` | App icon |
 | `settings.json` | Saved settings (created on first save) |
