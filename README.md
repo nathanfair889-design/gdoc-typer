@@ -9,6 +9,32 @@ It sends **real Windows keystrokes** (`SendInput`), so Google Docs sees ordinary
 typing. No browser extension, no automation framework, no `pip install` —
 Python 3 with tkinter is all it needs.
 
+## The rules, in one paragraph
+
+Write your text exactly as it should end up, because whatever you put in the
+box is what lands in the document — press **Tab** where you want to jump to
+the next table cell and **Enter** for a new paragraph inside the one you are
+already in, leave a blank line between paragraphs in ordinary prose, and do
+not start a line with `- ` or `1. ` unless you actually want Docs to turn it
+into a list; before the first run of the day open **Tools > Preferences** in
+Docs and uncheck *Automatically capitalise words* and *Automatically correct
+spelling*, or Google will quietly repair the typos before the typist gets
+back to them; put the cursor at the very **end** of the document (or in the
+first cell you want filled), because the caret is tracked by arithmetic
+rather than read back from the page, which is also why you must not touch
+the keyboard or mouse once it starts — it will stop itself the instant you
+do, and **Resume where it stopped** picks it up again; always hit **Dry run**
+or **Watch it type** first to check the text and the cell count look right,
+since Tab characters are invisible in the box and one missing Tab shifts
+every cell after it; start it with **Ctrl+Alt+T** once you are already
+clicked into the doc, **Ctrl+Alt+P** to pause, **Esc** to stop; keep
+*Sentences first typed as a rougher draft* low, around 10-20%, because
+rewriting every sentence is not what writing looks like; set a
+**Sessions** length if the run is long, so it writes in bursts with real
+gaps instead of one implausible unbroken block; and on anything that
+matters, run it once on a duplicate of the document first, remembering that
+the table must already exist and that a Tab in the last cell adds a new row.
+
 ## Running it
 
 **Add it to the Start Menu** so you can just search for it:
@@ -88,36 +114,6 @@ Each mistake that is fixed *inline* gets noticed on its own schedule —
 immediately, at the end of the word, or a few words later — then backspaced
 out and retyped, with a short hesitation first. A small share can be left in
 uncorrected, which is what real typing looks like.
-
-## While it is running
-
-**It stops the moment you touch anything.** Windows tags every synthetic
-keystroke as injected; yours are not. A low-level hook watches for real key
-presses and mouse clicks and aborts immediately, because the caret position
-is tracked by arithmetic — one stray keypress and everything after it
-lands in the wrong place. Better to stop than to scramble the document.
-
-**Pause and resume.** Pause holds the run where it is. If a run stops early,
-for any reason, **Resume where it stopped** re-plans the remaining text and
-carries on, so a fifty-minute job survives an interruption.
-
-**Hotkeys**, so you do not have to race the countdown:
-
-| Key | Does |
-| --- | --- |
-| `Ctrl+Alt+T` | Start, or stop if already running |
-| `Ctrl+Alt+P` | Pause / resume |
-| `Esc` | Stop |
-
-**Sessions.** Nobody writes two thousand words in one unbroken sitting, and
-Docs timestamps every revision, so a single long burst looks like exactly
-what it is. On the **Sessions** tab, set how long to type before stepping
-away and how long to stay away. During a break the input watcher stands
-down and your machine is yours; when it is over, click back into the
-document and it picks up where it left off.
-
-Breaks are only ever taken at a sentence boundary, never mid-word or
-mid-revision-pass.
 
 ## While it is running
 
