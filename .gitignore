@@ -10,3 +10,8 @@ settings.json
 
 # Learned writing profile (personal data)
 writing_profile.json
+
+# Credentials never belong in this repo - see apikey.py
+api_key
+*.key
+.env

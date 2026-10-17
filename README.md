@@ -233,6 +233,32 @@ Hunt and peck, Fix everything inline, Clean (no mistakes).
 - The tool never types into its own window.
 - **Esc** stops a run immediately.
 
+## API keys
+
+If an API-backed feature is ever enabled, **the key never goes in this
+repository.** It is read from, in order:
+
+1. the `ANTHROPIC_API_KEY` environment variable
+2. `%APPDATA%\GoogleDocTyperpi_key`
+
+Both sit outside the project folder, so there is no file in here that could
+be committed by mistake. That is deliberate: the protection is structural,
+not a matter of remembering to ignore a file.
+
+As a second layer, enable the pre-commit hook once per clone:
+
+```
+python install_hooks.py
+```
+
+It refuses any commit containing something shaped like an Anthropic,
+OpenAI, AWS or GitHub credential. Verified both ways — it blocks a key and
+lets ordinary code through. Undo with `git config --unset core.hooksPath`.
+
+**If a key is ever exposed, revoke it in the Console first.** Rewriting git
+history does not help once something has been pushed to a public repo; it is
+scraped within minutes, and the only real fix is making the key useless.
+
 ## Files
 
 | File | Purpose |
@@ -242,6 +268,9 @@ Hunt and peck, Fix everything inline, Clean (no mistakes).
 | `writing_profile.py` | Learns a profile from a Docs revision changelog |
 | `theme.py` | Dark palette and ttk styling |
 | `winkeys.py` | Windows `SendInput` keystroke injection |
+| `apikey.py` | Reads the API key from outside the repo |
+| `.githooks/pre-commit` | Refuses commits containing credentials |
+| `install_hooks.py` | Enables that hook |
 | `install_shortcut.ps1` | Adds a searchable Start Menu entry |
 | `typer.ico` | App icon |
 | `settings.json` | Saved settings (created on first save) |

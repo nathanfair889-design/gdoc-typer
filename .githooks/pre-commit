@@ -1,0 +1,46 @@
+#!/bin/sh
+# Refuse any commit that contains something shaped like an API key.
+#
+# Enable with:  python install_hooks.py
+# (that points core.hooksPath at this directory)
+#
+# Note: these are ERE patterns for `grep -E`, so quantifiers are {16,},
+# NOT \{16,\} - escaping them makes grep match literal braces and the hook
+# silently passes everything.
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+ANTHROPIC='sk-ant-[A-Za-z0-9_-]{16,}'
+OPENAI='sk-[A-Za-z0-9]{32,}'
+AWS='AKIA[0-9A-Z]{16}'
+GITHUB='gh[pousr]_[A-Za-z0-9]{30,}'
+ASSIGN='(api[_-]?key|secret|token|password)[[:space:]]*[:=][[:space:]]*["'"'"'][A-Za-z0-9_/+-]{20,}'
+PATTERN="$ANTHROPIC|$OPENAI|$AWS|$GITHUB|$ASSIGN"
+
+found=0
+for file in $staged; do
+    if git show ":$file" 2>/dev/null | grep -qE "$PATTERN"; then
+        echo "BLOCKED: $file looks like it contains a credential"
+        git show ":$file" | grep -nE "$PATTERN" | head -3 | \
+            sed 's/\(.\{90\}\).*/\1.../' | sed 's/^/    /'
+        found=1
+    fi
+done
+
+if [ "$found" = "1" ]; then
+    cat <<'MSG'
+
+This commit was blocked because it looks like it contains a credential.
+
+The key belongs OUTSIDE this repository. This project reads it from the
+ANTHROPIC_API_KEY environment variable, or from
+%APPDATA%\GoogleDocTyper\api_key - never from a file in here.
+
+False positive? Commit with --no-verify.
+If a real key was ever pushed, revoke it in the Console first. Scrubbing
+history is not enough once it has been public.
+MSG
+    exit 1
+fi
+exit 0
