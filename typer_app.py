@@ -371,6 +371,8 @@ class App(ttk.Frame):
                    command=self.open_file).pack(side="right")
         ttk.Button(header, text="Clear",
                    command=lambda: self.text.delete("1.0", "end")).pack(side="right", padx=4)
+        ttk.Button(header, text="Cell break",
+                   command=self._insert_cell_break).pack(side="right", padx=4)
 
         wrap = ttk.Frame(left)
         wrap.pack(fill="both", expand=True, pady=(4, 6))
@@ -383,6 +385,11 @@ class App(ttk.Frame):
         scroll.pack(side="right", fill="y")
         self.text.insert("1.0", SAMPLE)
         self.text.bind("<<Modified>>", self._on_text_change)
+        # Tk hands focus to the next widget on Tab; we want a cell break.
+        self.text.bind("<Tab>", self._insert_cell_break)
+        self.text.bind("<Shift-Tab>", lambda _e: "break")
+        # tabs are whitespace and invisible, so colour them in
+        self.text.tag_configure("cellbreak", background=theme.ACCENT)
 
         self.preview = tk.Text(left, height=7, wrap="word", font=("Consolas", 9),
                                state="disabled")
@@ -609,10 +616,31 @@ class App(ttk.Frame):
     def source_text(self):
         return self.text.get("1.0", "end-1c")
 
+    def _insert_cell_break(self, _event=None):
+        """A Tab in the text means 'jump to the next table cell'."""
+        self.text.insert("insert", "\t")
+        self._mark_cell_breaks()
+        return "break"            # stop Tk stealing focus
+
+    def _mark_cell_breaks(self):
+        """Highlight every Tab so the cell structure is actually visible."""
+        self.text.tag_remove("cellbreak", "1.0", "end")
+        index = "1.0"
+        while True:
+            index = self.text.search("\t", index, "end")
+            if not index:
+                break
+            end = f"{index}+1c"
+            self.text.tag_add("cellbreak", index, end)
+            index = end
+
     def _on_text_change(self, _event=None):
         self.text.edit_modified(False)
-        chars = len(self.source_text())
-        self.set_status(f"{chars} characters ready.")
+        self._mark_cell_breaks()
+        text = self.source_text()
+        cells = text.count("\t")
+        note = f", {cells} cell breaks" if cells else ""
+        self.set_status(f"{len(text)} characters{note} ready.")
 
     def open_file(self):
         path = filedialog.askopenfilename(

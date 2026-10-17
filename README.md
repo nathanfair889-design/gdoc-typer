@@ -14,16 +14,19 @@ Python 3 with tkinter is all it needs.
 Whatever you put in the box is exactly what lands in the document, character
 for character, so write it as finished text and not as instructions — there
 is no markup, `**bold**` stays as literal asterisks, and there is no way to
-make a heading, bold or italics; press **Tab** once for every jump to the
-next table cell, counting them carefully because two Tabs in a row skips a
-cell and leaves it blank while one missing Tab shifts everything after it
-into the wrong cell, and a Tab in the last cell of a table makes a new row;
-press **Enter** for a new paragraph *inside* the cell you are already in,
-which is how a single cell holds Idea, Examples and Details as three lines;
-in ordinary prose leave a blank line between paragraphs; never begin a line
-with `- `, `* ` or `1. ` unless you genuinely want Docs to convert it into a
-bulleted or numbered list; and type real apostrophes and quotes normally,
-since Docs curls them for you.
+make a heading, bold or italics; to jump to the next table cell press the
+**Tab key** right there in the text box, or click **Cell break** above it,
+and each one shows up as a small coloured block so you can see the structure
+(the box also reports how many cell breaks it holds, and the estimate line
+says how many cells the run will pass through); count them carefully,
+because two in a row skips a cell and leaves it blank, one missing shifts
+everything after it into the wrong cell, and one in the last cell of a table
+makes a new row; press **Enter** for a new paragraph *inside* the cell you
+are already in, which is how a single cell holds Idea, Examples and Details
+as three lines; in ordinary prose leave a blank line between paragraphs;
+never begin a line with `- `, `* ` or `1. ` unless you genuinely want Docs to
+convert it into a bulleted or numbered list; and type apostrophes and quotes
+normally, since Docs curls them for you.
 
 ## Running it
 
