@@ -739,6 +739,7 @@ class App(ttk.Frame):
         if not result:
             return
         _events, st = result
+        cells = f" Moves through {st.cells + 1} table cells." if st.cells else ""
         breaks = ""
         if st.breaks:
             typing = sum(e[0] for e in _events if e[1] != "break")
@@ -748,7 +749,8 @@ class App(ttk.Frame):
             f"About {engine.format_duration(st.duration)} to type "
             f"{st.chars} characters - {st.keystrokes} keystrokes, "
             f"{st.mistakes} mistakes, {st.revisions} revision passes, "
-            f"{st.backspaces} backspaces, {st.arrows} arrow presses." + breaks)
+            f"{st.backspaces} backspaces, {st.arrows} arrow presses."
+            + cells + breaks)
 
     def toggle_preview(self):
         """Watch the plan play out in here, without touching any document."""

@@ -288,6 +288,7 @@ class Stats:
     corrections: int = 0
     revisions: int = 0
     rewrites: int = 0
+    cells: int = 0
     breaks: int = 0
     duration: float = 0.0
     result_text: str = ""
@@ -522,15 +523,20 @@ def build_plan(text, cfg, rewrites=None):
                              or (prev == " " and prev2 in ".!?\"')"))
         at_word_start = ch.isalpha() and not (prev.isalpha() or prev == "'")
 
-        # never carry an unfixed mistake across a line break
-        if ch == "\n":
+        # Never carry an unfixed mistake across a line break - or, in a table,
+        # across a cell boundary. Tab moves to the next cell and inserts no
+        # character at all, so the caret arithmetic cannot cross it: a pass
+        # that arrowed back over a Tab would land in the wrong cell and
+        # scramble the table. Settle everything first, every time.
+        if ch in "\n\t":
             if pending is not None:
                 fix_inline()
             if deferred:
                 revision_pass()
 
         # ---- pauses that belong before this keystroke ----
-        if prev == "\n":
+        if prev in "\n\t":
+            # a new paragraph, or a new table cell - both are a fresh thought
             extra += rng.uniform(cfg.paragraph_pause_min, cfg.paragraph_pause_max)
         elif prev == " " and prev2 in ".!?":
             extra += rng.uniform(cfg.sentence_pause_min, cfg.sentence_pause_max)
@@ -599,6 +605,8 @@ def build_plan(text, cfg, rewrites=None):
         # ---- ordinary keystroke ----
         emit_char(ch)
         stats.chars += 1
+        if ch == "	":
+            stats.cells += 1
 
         if ch in ".!?":
             ended_sentence = True

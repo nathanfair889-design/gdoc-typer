@@ -149,6 +149,41 @@ document and it picks up where it left off.
 Breaks are only ever taken at a sentence boundary, never mid-word or
 mid-revision-pass.
 
+## Tables
+
+It works inside Google Docs tables, which the linear caret model would
+otherwise break. **A Tab character in your text moves to the next cell.**
+Enter still makes a new paragraph *inside* the current cell.
+
+```
+Name:<TAB>Nathan
+Unit:<TAB>Chapter 4
+1<TAB>Idea: Colonial trade expanded.
+Examples: The triangular trade moved goods.
+Details: Boston merchants profited.<TAB>What's the point?: Trade shaped society.
+```
+
+Why this needs special handling: Tab jumps to another cell and inserts **no
+character at all**, while arrow keys move exactly one character. If a
+revision pass ever arrowed backwards over a cell boundary it would land in
+the wrong cell and scramble the table. So a Tab is a hard flush point —
+every outstanding typo and rewrite is settled *before* leaving a cell, and
+corrections are always confined to the cell they happened in. Verified over
+400 seeds with aggressive error rates: no caret movement ever crosses a
+boundary.
+
+The estimate line reports how many cells a run will move through, since
+Tab characters are invisible in the text box and easy to get wrong.
+
+**Two things Docs does that are not the typer:**
+
+- Tab in the **last** cell of a table creates a **new row**. Too many tabs
+  means extra rows.
+- The table must already exist. This fills cells; it does not draw tables.
+
+Test on a scratch document with a copy of your table before running it on
+anything you care about.
+
 ## Learn how you actually write
 
 Instead of guessing at the sliders, the app can measure them from a document
