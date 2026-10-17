@@ -231,6 +231,94 @@ class Typist(threading.Thread):
 
 
 # --------------------------------------------------------------------------
+# live preview
+# --------------------------------------------------------------------------
+
+class Replay:
+    """Plays a keystroke plan into a Text widget instead of the OS.
+
+    Same event stream the real run uses, so what you watch here is exactly
+    what the document would get - the hesitations, the backtracking, the
+    revision passes. Nothing is sent to any other window.
+    """
+
+    BREAK_CAP_MS = 2000          # don't actually sit through a 20 minute break
+
+    def __init__(self, app, events, speed=1.0):
+        self.app = app
+        self.events = events
+        self.speed = max(speed, 0.01)
+        self.index = 0
+        self.after_id = None
+        self.running = False
+        self.simulated = 0.0
+
+    def start(self):
+        widget = self.app.preview
+        widget.configure(state="normal")
+        widget.delete("1.0", "end")
+        widget.focus_set()
+        self.running = True
+        self._schedule()
+
+    def stop(self):
+        self.running = False
+        if self.after_id is not None:
+            try:
+                self.app.root.after_cancel(self.after_id)
+            except Exception:
+                pass
+            self.after_id = None
+        self.app.preview.configure(state="disabled")
+
+    def _schedule(self):
+        if not self.running or self.index >= len(self.events):
+            self._finish()
+            return
+        delay, kind = self.events[self.index][0], self.events[self.index][1]
+        millis = max(1, int(delay * 1000.0 / self.speed))
+        if kind == "break":
+            millis = min(millis, self.BREAK_CAP_MS)
+        self.after_id = self.app.root.after(millis, self._apply)
+
+    def _apply(self):
+        if not self.running:
+            return
+        delay, kind, value, _source = self.events[self.index]
+        self.index += 1
+        self.simulated += delay
+        widget = self.app.preview
+        try:
+            if kind == "char":
+                widget.insert("insert", value)
+            elif kind == "back":
+                widget.delete("insert-1c", "insert")
+            elif kind == "left":
+                widget.mark_set("insert", "insert-1c")
+            elif kind == "right":
+                widget.mark_set("insert", "insert+1c")
+            widget.see("insert")
+        except tk.TclError:
+            pass
+
+        if self.index % 12 == 0 or kind == "break":
+            done = 100.0 * self.index / max(len(self.events), 1)
+            note = " (on a break)" if kind == "break" else ""
+            self.app.set_status(
+                f"Preview {done:.0f}% - {engine.format_duration(self.simulated)} "
+                f"of typing so far{note}. {self.speed:g}x speed.")
+        self._schedule()
+
+    def _finish(self):
+        self.running = False
+        self.app.preview.configure(state="disabled")
+        self.app.replay = None
+        self.app.set_status(
+            f"Preview finished - {engine.format_duration(self.simulated)} "
+            f"of typing at {self.speed:g}x. Nothing was sent to any document.")
+
+
+# --------------------------------------------------------------------------
 # GUI
 # --------------------------------------------------------------------------
 
@@ -245,6 +333,7 @@ class App(ttk.Frame):
         self.outbox = queue.Queue()
         self.plan = None
         self.resume_at = 0            # where an interrupted run stopped
+        self.replay = None            # the live preview, when one is playing
 
         # one message-loop thread hosts both the input hooks and the hotkeys
         self.watcher = winkeys.InputWatcher(
@@ -289,7 +378,7 @@ class App(ttk.Frame):
         self.preview = tk.Text(left, height=7, wrap="word", font=("Consolas", 9),
                                state="disabled")
         theme.style_text(self.preview, muted=True)
-        ttk.Label(left, text="Dry run (what would land in the doc)",
+        ttk.Label(left, text="Preview - dry run output, or watch it type live",
                   style="Muted.TLabel").pack(anchor="w")
         self.preview.pack(fill="x", pady=(2, 6))
 
@@ -309,6 +398,18 @@ class App(ttk.Frame):
         self.resume_btn.pack(side="left", padx=(0, 6))
         ttk.Button(bar, text="Dry run", command=self.dry_run).pack(side="left")
         ttk.Button(bar, text="Estimate", command=self.estimate).pack(side="left", padx=6)
+
+        watch = ttk.Frame(left)
+        watch.pack(fill="x", pady=(6, 0))
+        self.watch_btn = ttk.Button(watch, text="Watch it type",
+                                    command=self.toggle_preview)
+        self.watch_btn.pack(side="left")
+        ttk.Label(watch, text="at", style="Muted.TLabel").pack(side="left", padx=6)
+        self.preview_speed = ttk.Combobox(
+            watch, values=["1x (real time)", "4x", "16x", "64x"],
+            state="readonly", width=14)
+        self.preview_speed.set("4x")
+        self.preview_speed.pack(side="left")
 
         self.progress = ttk.Progressbar(left, mode="determinate")
         self.progress.pack(fill="x", pady=(8, 2))
@@ -520,6 +621,26 @@ class App(ttk.Frame):
             f"{st.mistakes} mistakes, {st.revisions} revision passes, "
             f"{st.backspaces} backspaces, {st.arrows} arrow presses." + breaks)
 
+    def toggle_preview(self):
+        """Watch the plan play out in here, without touching any document."""
+        if self.replay and self.replay.running:
+            self.replay.stop()
+            self.replay = None
+            self.watch_btn.configure(text="Watch it type")
+            self.set_status("Preview stopped.")
+            return
+        result = self._plan()
+        if not result:
+            return
+        events, st = result
+        speed = float(self.preview_speed.get().split("x")[0] or 1)
+        self.replay = Replay(self, events, speed)
+        self.watch_btn.configure(text="Stop preview")
+        self.set_status(
+            f"Playing {st.keystrokes} keystrokes at {speed:g}x "
+            f"(~{engine.format_duration(st.duration / speed)} to watch).")
+        self.replay.start()
+
     def dry_run(self):
         result = self._plan()
         if not result:
@@ -540,6 +661,10 @@ class App(ttk.Frame):
     def start(self, offset=0):
         if self.typist and self.typist.is_alive():
             return
+        if self.replay and self.replay.running:
+            self.replay.stop()
+            self.replay = None
+            self.watch_btn.configure(text="Watch it type")
         result = self._plan(offset)
         if not result:
             return

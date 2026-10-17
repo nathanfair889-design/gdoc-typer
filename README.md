@@ -119,6 +119,36 @@ document and it picks up where it left off.
 Breaks are only ever taken at a sentence boundary, never mid-word or
 mid-revision-pass.
 
+## While it is running
+
+**It stops the moment you touch anything.** Windows tags every synthetic
+keystroke as injected; yours are not. A low-level hook watches for real key
+presses and mouse clicks and aborts immediately, because the caret position
+is tracked by arithmetic — one stray keypress and everything after it
+lands in the wrong place. Better to stop than to scramble the document.
+
+**Pause and resume.** Pause holds the run where it is. If a run stops early,
+for any reason, **Resume where it stopped** re-plans the remaining text and
+carries on, so a fifty-minute job survives an interruption.
+
+**Hotkeys**, so you do not have to race the countdown:
+
+| Key | Does |
+| --- | --- |
+| `Ctrl+Alt+T` | Start, or stop if already running |
+| `Ctrl+Alt+P` | Pause / resume |
+| `Esc` | Stop |
+
+**Sessions.** Nobody writes two thousand words in one unbroken sitting, and
+Docs timestamps every revision, so a single long burst looks like exactly
+what it is. On the **Sessions** tab, set how long to type before stepping
+away and how long to stay away. During a break the input watcher stands
+down and your machine is yours; when it is over, click back into the
+document and it picks up where it left off.
+
+Breaks are only ever taken at a sentence boundary, never mid-word or
+mid-revision-pass.
+
 ## Learn how you actually write
 
 Instead of guessing at the sliders, the app can measure them from a document
@@ -171,6 +201,9 @@ and the arrow-key and pause timings for it.
 **Sessions** — how long to type before a break, and how long breaks last.
 0 disables them.
 
+**Sessions** — how long to type before a break, and how long breaks last.
+0 disables them.
+
 **Inline fixes** — for mistakes *not* saved for a pass: the weights for
 noticed-immediately / at-end-of-word / a-few-words-later, and the hesitation
 before fixing.
@@ -184,6 +217,11 @@ Hunt and peck, Fix everything inline, Clean (no mistakes).
   doc, plus mistake and backspace counts. Use it to tune rates before you
   touch a real document.
 - **Estimate** — how long the run will take.
+- **Watch it type** — replays the plan into the app's own preview pane at
+  1x, 4x, 16x or 64x. Same event stream the real run uses, so you see the
+  actual rhythm — hesitations, backtracking, revision passes — without
+  touching a document. Breaks are capped at two seconds so you can skip
+  through them.
 - **Random seed** — set it to any value to make a run exactly reproducible;
   leave blank for fresh randomness each time.
 
