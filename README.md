@@ -239,7 +239,7 @@ If an API-backed feature is ever enabled, **the key never goes in this
 repository.** It is read from, in order:
 
 1. the `ANTHROPIC_API_KEY` environment variable
-2. `%APPDATA%\GoogleDocTyperpi_key`
+2. `%APPDATA%\GoogleDocTyper\api_key`
 
 Both sit outside the project folder, so there is no file in here that could
 be committed by mistake. That is deliberate: the protection is structural,
