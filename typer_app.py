@@ -25,6 +25,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_PATH = os.path.join(HERE, "settings.json")
 PROFILE_PATH = os.path.join(HERE, "writing_profile.json")
 
+HOTKEY_START = 1
+HOTKEY_PAUSE = 2
+
 SAMPLE = (
     "The quarterly review is due tomorrow. I want to separate the budget "
     "section from the summary, because their feedback was pretty clear.\n\n"
@@ -40,13 +43,19 @@ SAMPLE = (
 class Typist(threading.Thread):
     """Replays a keystroke plan into whatever window has focus."""
 
-    def __init__(self, events, cfg, outbox, own_title):
+    def __init__(self, events, cfg, outbox, own_title, watcher=None,
+                 source_offset=0):
         super().__init__(daemon=True)
         self.events = events
         self.cfg = cfg
         self.outbox = outbox
         self.own_title = own_title
+        self.watcher = watcher
+        self.source_offset = source_offset   # where in the text this run began
         self.stop_flag = threading.Event()
+        self.pause_flag = threading.Event()
+        self.interrupted = False
+        self.source_done = source_offset     # how far through the text we got
 
     # -- helpers ----------------------------------------------------------
     def post(self, kind, **data):
@@ -111,22 +120,42 @@ class Typist(threading.Thread):
                 self.post("done", reason="cancelled")
                 return
             self.post("status", text="Typing...")
+            self.arm()
             clock = time.perf_counter()
 
-            for delay, kind, value in self.events:
+            for delay, kind, value, source_at in self.events:
+                self.source_done = self.source_offset + source_at
+
+                # a break: step away, and let the user have their machine back
+                if kind == "break":
+                    if not self.take_break(delay):
+                        self.finish("cancelled", done, total)
+                        return
+                    clock = time.perf_counter()
+                    continue
+
+                if self.pause_flag.is_set():
+                    if not self.hold():
+                        self.finish("cancelled", done, total)
+                        return
+                    clock = time.perf_counter()
+
                 clock += delay
                 now = time.perf_counter()
                 if clock < now - 0.25:               # never burst to catch up
                     clock = now
                 if not winkeys.sleep_until(clock, self.stopped):
-                    self.post("done", reason="cancelled", typed=done, total=total)
+                    self.finish("interrupted" if self.interrupted else "cancelled",
+                                done, total)
                     return
 
                 ready, _ = self.target_ready()
                 if not ready:
+                    self.disarm()
                     if not self.wait_for_target():
-                        self.post("done", reason="cancelled", typed=done, total=total)
+                        self.finish("cancelled", done, total)
                         return
+                    self.arm()
                     clock = time.perf_counter()
 
                 try:
@@ -139,7 +168,7 @@ class Typist(threading.Thread):
                     elif kind == "right":
                         winkeys.arrow_right()
                 except OSError as exc:
-                    self.post("done", reason="error", detail=str(exc))
+                    self.finish("error", done, total, detail=str(exc))
                     return
 
                 done += 1
@@ -148,7 +177,57 @@ class Typist(threading.Thread):
                     self.post("progress", typed=done, total=total)
 
         self.post("progress", typed=done, total=total)
-        self.post("done", reason="finished", typed=done, total=total)
+        self.finish("finished", done, total)
+
+    # -- arming, pausing, breaks -----------------------------------------
+    def arm(self):
+        """Watch for real keystrokes only while we are actually typing."""
+        if self.watcher:
+            self.watcher.arm()
+
+    def disarm(self):
+        if self.watcher:
+            self.watcher.disarm()
+
+    def finish(self, reason, done, total, **extra):
+        self.disarm()
+        self.post("done", reason=reason, typed=done, total=total,
+                  source_done=self.source_done, **extra)
+
+    def hold(self):
+        """Sit still while paused. False if we were stopped instead."""
+        self.disarm()
+        self.post("status", text="Paused. Resume when you are ready.")
+        while self.pause_flag.is_set():
+            if self.stopped():
+                return False
+            time.sleep(0.1)
+        if not self.wait_for_target():
+            return False
+        self.post("status", text="Resuming...")
+        self.arm()
+        return True
+
+    def take_break(self, seconds):
+        """A deliberate gap between writing sessions - the machine is yours."""
+        self.disarm()
+        ends = time.perf_counter() + seconds
+        while True:
+            left = ends - time.perf_counter()
+            if left <= 0:
+                break
+            if self.stopped():
+                return False
+            mins, secs = divmod(int(left), 60)
+            self.post("status",
+                      text=f"On a break - back in {mins}m {secs:02d}s. "
+                           f"Use your computer normally (Esc cancels).")
+            time.sleep(min(1.0, left))
+        if not self.wait_for_target():
+            return False
+        self.post("status", text="Break over - picking up where it left off.")
+        self.arm()
+        return True
 
 
 # --------------------------------------------------------------------------
@@ -165,6 +244,15 @@ class App(ttk.Frame):
         self.typist = None
         self.outbox = queue.Queue()
         self.plan = None
+        self.resume_at = 0            # where an interrupted run stopped
+
+        # one message-loop thread hosts both the input hooks and the hotkeys
+        self.watcher = winkeys.InputWatcher(
+            on_user_input=self._on_user_input, on_hotkey=self._on_hotkey)
+        self.watcher.start(hotkeys={
+            HOTKEY_START: (winkeys.MOD_CONTROL | winkeys.MOD_ALT, ord("T")),
+            HOTKEY_PAUSE: (winkeys.MOD_CONTROL | winkeys.MOD_ALT, ord("P")),
+        })
 
         self._build()
         self.load_settings()
@@ -213,6 +301,12 @@ class App(ttk.Frame):
         self.stop_btn = ttk.Button(bar, text="Stop (Esc)", command=self.stop,
                                    state="disabled")
         self.stop_btn.pack(side="left", padx=6)
+        self.pause_btn = ttk.Button(bar, text="Pause", command=self.toggle_pause,
+                                    state="disabled")
+        self.pause_btn.pack(side="left", padx=(0, 6))
+        self.resume_btn = ttk.Button(bar, text="Resume where it stopped",
+                                     command=self.resume_run, state="disabled")
+        self.resume_btn.pack(side="left", padx=(0, 6))
         ttk.Button(bar, text="Dry run", command=self.dry_run).pack(side="left")
         ttk.Button(bar, text="Estimate", command=self.estimate).pack(side="left", padx=6)
 
@@ -403,10 +497,10 @@ class App(ttk.Frame):
         self.text.delete("1.0", "end")
         self.text.insert("1.0", content)
 
-    def _plan(self):
-        text = self.source_text()
+    def _plan(self, offset=0):
+        text = engine.normalise(self.source_text())[offset:]
         if not text.strip():
-            messagebox.showinfo(APP_TITLE, "There is no text to type.")
+            messagebox.showinfo(APP_TITLE, "There is no text left to type.")
             return None
         return engine.build_plan(text, self.get_config())
 
@@ -415,11 +509,16 @@ class App(ttk.Frame):
         if not result:
             return
         _events, st = result
+        breaks = ""
+        if st.breaks:
+            typing = sum(e[0] for e in _events if e[1] != "break")
+            breaks = (f" That includes {st.breaks} breaks - "
+                      f"{engine.format_duration(typing)} of actual typing.")
         self.set_status(
             f"About {engine.format_duration(st.duration)} to type "
             f"{st.chars} characters - {st.keystrokes} keystrokes, "
             f"{st.mistakes} mistakes, {st.revisions} revision passes, "
-            f"{st.backspaces} backspaces, {st.arrows} arrow presses.")
+            f"{st.backspaces} backspaces, {st.arrows} arrow presses." + breaks)
 
     def dry_run(self):
         result = self._plan()
@@ -438,21 +537,49 @@ class App(ttk.Frame):
             + ("Final text matches your input." if exact
                else "Some mistakes were left in on purpose."))
 
-    def start(self):
+    def start(self, offset=0):
         if self.typist and self.typist.is_alive():
             return
-        result = self._plan()
+        result = self._plan(offset)
         if not result:
             return
         events, st = result
         self.progress.configure(maximum=len(events), value=0)
         self.start_btn.configure(state="disabled")
         self.stop_btn.configure(state="normal")
-        self.set_status(f"Preparing {st.keystrokes} keystrokes "
-                        f"(~{engine.format_duration(st.duration)})...")
+        self.pause_btn.configure(state="normal", text="Pause")
+        self.resume_btn.configure(state="disabled")
+        note = f" from character {offset}" if offset else ""
+        breaks = f", {st.breaks} breaks" if st.breaks else ""
+        self.set_status(f"Preparing {st.keystrokes} keystrokes{note} "
+                        f"(~{engine.format_duration(st.duration)}{breaks})...")
         self.typist = Typist(events, self.get_config(), self.outbox,
-                             self.root.title())
+                             self.root.title(), watcher=self.watcher,
+                             source_offset=offset)
         self.typist.start()
+
+    def resume_run(self):
+        self.start(offset=self.resume_at)
+
+    def toggle_pause(self):
+        if not (self.typist and self.typist.is_alive()):
+            return
+        if self.typist.pause_flag.is_set():
+            self.typist.pause_flag.clear()
+            self.pause_btn.configure(text="Pause")
+        else:
+            self.typist.pause_flag.set()
+            self.pause_btn.configure(text="Resume")
+
+    # -- callbacks from the watcher thread (keep these cheap) -------------
+    def _on_user_input(self, source):
+        typist = self.typist
+        if typist and typist.is_alive() and not typist.pause_flag.is_set():
+            typist.interrupted = True
+            typist.stop_flag.set()
+
+    def _on_hotkey(self, hotkey_id):
+        self.outbox.put({"kind": "hotkey", "id": hotkey_id})
 
     def stop(self):
         if self.typist:
@@ -474,27 +601,55 @@ class App(ttk.Frame):
                     pct = 100.0 * msg["typed"] / max(msg["total"], 1)
                     self.set_status(f"Typing... {pct:.0f}% "
                                     f"({msg['typed']}/{msg['total']} keystrokes)")
+                elif kind == "hotkey":
+                    self._handle_hotkey(msg["id"])
                 elif kind == "done":
                     self._finish(msg)
         except queue.Empty:
             pass
         self.root.after(80, self._drain)
 
+    def _handle_hotkey(self, hotkey_id):
+        if hotkey_id == HOTKEY_START:
+            if self.typist and self.typist.is_alive():
+                self.stop()
+            else:
+                self.start()
+        elif hotkey_id == HOTKEY_PAUSE:
+            self.toggle_pause()
+
     def _finish(self, msg):
         self.start_btn.configure(state="normal")
         self.stop_btn.configure(state="disabled")
+        self.pause_btn.configure(state="disabled", text="Pause")
         reason = msg.get("reason")
+        self.resume_at = int(msg.get("source_done", 0) or 0)
+        full = len(engine.normalise(self.source_text()))
+        can_resume = (reason in ("interrupted", "cancelled")
+                      and 0 < self.resume_at < full)
+        self.resume_btn.configure(state="normal" if can_resume else "disabled")
+
         if reason == "finished":
             self.set_status("Done - the document has your text.")
+        elif reason == "interrupted":
+            self.set_status(
+                "Stopped - you touched the keyboard or mouse, so it bailed out "
+                "rather than risk scrambling the document."
+                + (" Click Resume to carry on." if can_resume else ""))
         elif reason == "cancelled":
-            self.set_status("Stopped. Whatever was typed is left in the document.")
+            self.set_status("Stopped. Whatever was typed is left in the document."
+                            + (" Resume is available." if can_resume else ""))
         else:
-            self.set_status(f"Stopped: {msg.get('detail', 'unknown error')}")
+            self.set_status("Stopped: " + str(msg.get("detail", "unknown error")))
 
     def on_close(self):
         if self.typist and self.typist.is_alive():
             self.typist.stop_flag.set()
             self.typist.join(timeout=1.0)
+        try:
+            self.watcher.stop()
+        except Exception:
+            pass
         try:
             self.save_settings()
         except Exception:

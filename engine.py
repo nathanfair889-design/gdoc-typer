@@ -158,6 +158,11 @@ class Config:
     spot_min: float = 0.20
     spot_max: float = 0.80
 
+    # sessions - write in bursts with real gaps, the way people actually do
+    session_minutes: float = 0.0        # 0 disables breaks entirely
+    break_minutes_min: float = 5.0
+    break_minutes_max: float = 25.0
+
     # safety
     window_filter: str = "Google Docs"
     seed: str = ""
@@ -201,6 +206,11 @@ NUMERIC_SPEC = [
         ("reread_max", "Pause before going back, max (s)", 0, 30, 0.05),
         ("spot_min", "Pause at each mistake, min (s)", 0, 10, 0.05),
         ("spot_max", "Pause at each mistake, max (s)", 0, 10, 0.05),
+    ]),
+    ("Sessions", [
+        ("session_minutes", "Type this long before a break (min, 0 = never)", 0, 240, 1),
+        ("break_minutes_min", "Break length, min (minutes)", 0, 600, 1),
+        ("break_minutes_max", "Break length, max (minutes)", 0, 600, 1),
     ]),
     ("Inline fixes", [
         ("fix_immediate_pct", "Noticed immediately (weight)", 0, 100, 1),
@@ -273,6 +283,7 @@ class Stats:
     mistakes: int = 0
     corrections: int = 0
     revisions: int = 0
+    breaks: int = 0
     duration: float = 0.0
     result_text: str = ""
 
@@ -378,6 +389,7 @@ def build_plan(text, cfg):
 
     sentences_since_pass = 0
     ended_sentence = False
+    session_end = (cfg.session_minutes * 60.0) if cfg.session_minutes > 0 else None
     revise_lo = int(max(1, cfg.revise_every_min))
     revise_hi = int(max(revise_lo, cfg.revise_every_max))
     next_pass_at = rng.randint(revise_lo, revise_hi)
@@ -390,7 +402,7 @@ def build_plan(text, cfg):
 
     def emit_char(ch, factor=1.0):
         nonlocal caret
-        events.append((delay(factor), "char", ch))
+        events.append((delay(factor), "char", ch, i))
         doc.insert(caret, ch)
         caret += 1
         stats.keystrokes += 1
@@ -402,7 +414,7 @@ def build_plan(text, cfg):
             extra = 0.0
         else:
             d = delay(cfg.backspace_speed)
-        events.append((d, "back", 1))
+        events.append((d, "back", 1, i))
         if caret > 0:
             doc.pop(caret - 1)
             caret -= 1
@@ -415,7 +427,7 @@ def build_plan(text, cfg):
         target = max(0, min(len(doc), target))
         step = "left" if target < caret else "right"
         for _ in range(abs(target - caret)):
-            events.append((delay(cfg.arrow_speed), step, 1))
+            events.append((delay(cfg.arrow_speed), step, 1, i))
         stats.keystrokes += abs(target - caret)
         stats.arrows += abs(target - caret)
         caret = target
@@ -571,6 +583,16 @@ def build_plan(text, cfg):
                 revision_pass()
                 sentences_since_pass = 0
                 next_pass_at = rng.randint(revise_lo, revise_hi)
+
+            # walk away for a while, then come back to it
+            if session_end is not None and pending is None and not deferred:
+                elapsed = sum(e[0] for e in events)
+                if elapsed >= session_end:
+                    gap = rng.uniform(cfg.break_minutes_min,
+                                      cfg.break_minutes_max) * 60.0
+                    events.append((max(gap, 1.0), "break", None, i))
+                    stats.breaks += 1
+                    session_end = elapsed + gap + cfg.session_minutes * 60.0
 
         consume(1)
 

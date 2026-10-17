@@ -89,6 +89,36 @@ immediately, at the end of the word, or a few words later — then backspaced
 out and retyped, with a short hesitation first. A small share can be left in
 uncorrected, which is what real typing looks like.
 
+## While it is running
+
+**It stops the moment you touch anything.** Windows tags every synthetic
+keystroke as injected; yours are not. A low-level hook watches for real key
+presses and mouse clicks and aborts immediately, because the caret position
+is tracked by arithmetic — one stray keypress and everything after it
+lands in the wrong place. Better to stop than to scramble the document.
+
+**Pause and resume.** Pause holds the run where it is. If a run stops early,
+for any reason, **Resume where it stopped** re-plans the remaining text and
+carries on, so a fifty-minute job survives an interruption.
+
+**Hotkeys**, so you do not have to race the countdown:
+
+| Key | Does |
+| --- | --- |
+| `Ctrl+Alt+T` | Start, or stop if already running |
+| `Ctrl+Alt+P` | Pause / resume |
+| `Esc` | Stop |
+
+**Sessions.** Nobody writes two thousand words in one unbroken sitting, and
+Docs timestamps every revision, so a single long burst looks like exactly
+what it is. On the **Sessions** tab, set how long to type before stepping
+away and how long to stay away. During a break the input watcher stands
+down and your machine is yours; when it is over, click back into the
+document and it picks up where it left off.
+
+Breaks are only ever taken at a sentence boundary, never mid-word or
+mid-revision-pass.
+
 ## Learn how you actually write
 
 Instead of guessing at the sliders, the app can measure them from a document
@@ -137,6 +167,9 @@ capitals, and how often a misspell-prone word comes out wrong.
 
 **Revision** — how much is saved for a later pass, how often to go back,
 and the arrow-key and pause timings for it.
+
+**Sessions** — how long to type before a break, and how long breaks last.
+0 disables them.
 
 **Inline fixes** — for mistakes *not* saved for a pass: the weights for
 noticed-immediately / at-end-of-word / a-few-words-later, and the hesitation
