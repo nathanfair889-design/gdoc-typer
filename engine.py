@@ -316,6 +316,21 @@ def normalise(text):
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
+# A typed stand-in for a cell break, so text can be drafted or pasted from
+# anywhere without having to press the Tab key in the box.
+MARKER_RE = re.compile(r"[(\[{<]\s*tab\s*[)\]}>]", re.IGNORECASE)
+
+
+def expand_markers(text):
+    """Turn (tab), [tab], {tab} or <tab> into real cell breaks."""
+    return MARKER_RE.sub("\t", text)
+
+
+def prepare(text):
+    """Everything that turns what was typed into what actually gets typed."""
+    return normalise(expand_markers(text))
+
+
 def _pick_mistake(text, i, cfg, rng, at_sentence_start, at_word_start):
     """Decide whether a mistake happens here, and what it looks like.
 

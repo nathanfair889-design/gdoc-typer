@@ -623,24 +623,22 @@ class App(ttk.Frame):
         return "break"            # stop Tk stealing focus
 
     def _mark_cell_breaks(self):
-        """Highlight every Tab so the cell structure is actually visible."""
+        """Highlight cell breaks - real tabs and typed (tab) markers alike."""
         self.text.tag_remove("cellbreak", "1.0", "end")
-        index = "1.0"
-        while True:
-            index = self.text.search("\t", index, "end")
-            if not index:
-                break
-            end = f"{index}+1c"
-            self.text.tag_add("cellbreak", index, end)
-            index = end
+        raw = self.source_text()
+        spans = [(m.start(), m.end()) for m in engine.MARKER_RE.finditer(raw)]
+        spans += [(i, i + 1) for i, ch in enumerate(raw) if ch == "\t"]
+        for start, end in spans:
+            self.text.tag_add("cellbreak", f"1.0+{start}c", f"1.0+{end}c")
 
     def _on_text_change(self, _event=None):
         self.text.edit_modified(False)
         self._mark_cell_breaks()
-        text = self.source_text()
-        cells = text.count("\t")
+        raw = self.source_text()
+        prepared = engine.prepare(raw)
+        cells = prepared.count("\t")
         note = f", {cells} cell breaks" if cells else ""
-        self.set_status(f"{len(text)} characters{note} ready.")
+        self.set_status(f"{len(prepared)} characters{note} ready.")
 
     def open_file(self):
         path = filedialog.askopenfilename(
@@ -753,7 +751,7 @@ class App(ttk.Frame):
         return drafts
 
     def _plan(self, offset=0):
-        text = engine.normalise(self.source_text())[offset:]
+        text = engine.prepare(self.source_text())[offset:]
         if not text.strip():
             messagebox.showinfo(APP_TITLE, "There is no text left to type.")
             return None
@@ -809,7 +807,7 @@ class App(ttk.Frame):
         self.preview.delete("1.0", "end")
         self.preview.insert("1.0", st.result_text)
         self.preview.configure(state="disabled")
-        exact = st.result_text == engine.normalise(self.source_text())
+        exact = st.result_text == engine.prepare(self.source_text())
         rewrote = f"{st.rewrites} rewrites, " if st.rewrites else ""
         self.set_status(
             rewrote +
@@ -911,7 +909,7 @@ class App(ttk.Frame):
         self.pause_btn.configure(state="disabled", text="Pause")
         reason = msg.get("reason")
         self.resume_at = int(msg.get("source_done", 0) or 0)
-        full = len(engine.normalise(self.source_text()))
+        full = len(engine.prepare(self.source_text()))
         can_resume = (reason in ("interrupted", "cancelled")
                       and 0 < self.resume_at < full)
         self.resume_btn.configure(state="normal" if can_resume else "disabled")
