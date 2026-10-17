@@ -9,31 +9,21 @@ It sends **real Windows keystrokes** (`SendInput`), so Google Docs sees ordinary
 typing. No browser extension, no automation framework, no `pip install` —
 Python 3 with tkinter is all it needs.
 
-## The rules, in one paragraph
+## Writing the text
 
-Write your text exactly as it should end up, because whatever you put in the
-box is what lands in the document — press **Tab** where you want to jump to
-the next table cell and **Enter** for a new paragraph inside the one you are
-already in, leave a blank line between paragraphs in ordinary prose, and do
-not start a line with `- ` or `1. ` unless you actually want Docs to turn it
-into a list; before the first run of the day open **Tools > Preferences** in
-Docs and uncheck *Automatically capitalise words* and *Automatically correct
-spelling*, or Google will quietly repair the typos before the typist gets
-back to them; put the cursor at the very **end** of the document (or in the
-first cell you want filled), because the caret is tracked by arithmetic
-rather than read back from the page, which is also why you must not touch
-the keyboard or mouse once it starts — it will stop itself the instant you
-do, and **Resume where it stopped** picks it up again; always hit **Dry run**
-or **Watch it type** first to check the text and the cell count look right,
-since Tab characters are invisible in the box and one missing Tab shifts
-every cell after it; start it with **Ctrl+Alt+T** once you are already
-clicked into the doc, **Ctrl+Alt+P** to pause, **Esc** to stop; keep
-*Sentences first typed as a rougher draft* low, around 10-20%, because
-rewriting every sentence is not what writing looks like; set a
-**Sessions** length if the run is long, so it writes in bursts with real
-gaps instead of one implausible unbroken block; and on anything that
-matters, run it once on a duplicate of the document first, remembering that
-the table must already exist and that a Tab in the last cell adds a new row.
+Whatever you put in the box is exactly what lands in the document, character
+for character, so write it as finished text and not as instructions — there
+is no markup, `**bold**` stays as literal asterisks, and there is no way to
+make a heading, bold or italics; press **Tab** once for every jump to the
+next table cell, counting them carefully because two Tabs in a row skips a
+cell and leaves it blank while one missing Tab shifts everything after it
+into the wrong cell, and a Tab in the last cell of a table makes a new row;
+press **Enter** for a new paragraph *inside* the cell you are already in,
+which is how a single cell holds Idea, Examples and Details as three lines;
+in ordinary prose leave a blank line between paragraphs; never begin a line
+with `- `, `* ` or `1. ` unless you genuinely want Docs to convert it into a
+bulleted or numbered list; and type real apostrophes and quotes normally,
+since Docs curls them for you.
 
 ## Running it
 
