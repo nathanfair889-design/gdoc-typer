@@ -166,12 +166,16 @@ class Config:
     break_minutes_min: float = 5.0
     break_minutes_max: float = 25.0
 
+    # which draft generator to use, kept here so it survives a restart
+    rewrite_backend: str = "Off"
+    rewrite_model: str = "claude-opus-5-5"
+
     # safety
     window_filter: str = "Google Docs"
     seed: str = ""
 
 
-TEXT_FIELDS = ("window_filter", "seed")
+TEXT_FIELDS = ("window_filter", "seed", "rewrite_backend", "rewrite_model")
 
 NUMERIC_SPEC = [
     ("Speed", [

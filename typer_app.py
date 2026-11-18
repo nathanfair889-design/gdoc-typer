@@ -341,6 +341,8 @@ class App(ttk.Frame):
         self.outbox = queue.Queue()
         self.plan = None
         self.resume_at = 0            # where an interrupted run stopped
+        self._closing = False
+        self._drain_id = None
         self.replay = None            # the live preview, when one is playing
         self.last_cost_note = ""
 
@@ -355,7 +357,7 @@ class App(ttk.Frame):
         self._build()
         self.load_settings()
         self.load_profile_if_saved()
-        self.root.after(80, self._drain)
+        self._drain_id = self.root.after(80, self._drain)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     # -- layout -----------------------------------------------------------
@@ -518,6 +520,8 @@ class App(ttk.Frame):
                 pass
         cfg.window_filter = self.window_filter.get()
         cfg.seed = self.seed.get()
+        cfg.rewrite_backend = self.rewrite_backend.get()
+        cfg.rewrite_model = self.rewrite_model.get()
         # keep min/max pairs sane no matter what was typed in
         for lo, hi in (("sentence_pause_min", "sentence_pause_max"),
                        ("paragraph_pause_min", "paragraph_pause_max"),
@@ -536,6 +540,10 @@ class App(ttk.Frame):
             var.set(round(getattr(cfg, attr), 4))
         self.window_filter.set(cfg.window_filter)
         self.seed.set(cfg.seed)
+        if cfg.rewrite_backend in REWRITE_BACKENDS:
+            self.rewrite_backend.set(cfg.rewrite_backend)
+        if cfg.rewrite_model in REWRITE_MODELS:
+            self.rewrite_model.set(cfg.rewrite_model)
 
     def apply_preset(self, _event=None):
         cfg = engine.Config()
@@ -711,7 +719,15 @@ class App(ttk.Frame):
     def _make_rewrites(self, text, cfg):
         """Build the {index: (draft, length)} map for this run, if enabled."""
         backend = self.rewrite_backend.get()
-        if backend == REWRITE_BACKENDS[0] or cfg.rewrite_pct <= 0:
+        if backend == REWRITE_BACKENDS[0]:
+            if cfg.rewrite_pct > 0:
+                self.last_cost_note = (
+                    " No rewrites: the draft generator is set to Off.")
+            return {}
+        if cfg.rewrite_pct <= 0:
+            self.last_cost_note = (
+                " No rewrites: 'Sentences first typed as a rougher draft' is "
+                "0% on the Mistakes tab, so nothing was sent to the API.")
             return {}
         sentences = rewriter.find_sentences(text)
         if not sentences:
@@ -744,8 +760,11 @@ class App(ttk.Frame):
                 + str(exc)[:300])
             return {}
         cost = backend_obj.estimate_cost()
+        usage = backend_obj.last_usage
+        tokens = (f" ({usage.input_tokens} in / {usage.output_tokens} out)"
+                  if usage is not None else "")
         self.last_cost_note = (
-            f" {len(drafts)} drafts from {model}"
+            f" {len(drafts)} drafts from {model}{tokens}"
             + (f", about ${cost:.4f}." if cost is not None else ".")
         )
         return drafts
@@ -776,7 +795,7 @@ class App(ttk.Frame):
             f"{st.chars} characters - {st.keystrokes} keystrokes, "
             f"{st.mistakes} mistakes, {st.revisions} revision passes, "
             f"{st.backspaces} backspaces, {st.arrows} arrow presses."
-            + cells + breaks)
+            + cells + breaks + self.last_cost_note)
 
     def toggle_preview(self):
         """Watch the plan play out in here, without touching any document."""
@@ -892,7 +911,8 @@ class App(ttk.Frame):
                     self._finish(msg)
         except queue.Empty:
             pass
-        self.root.after(80, self._drain)
+        if not self._closing:
+            self._drain_id = self.root.after(80, self._drain)
 
     def _handle_hotkey(self, hotkey_id):
         if hotkey_id == HOTKEY_START:
@@ -928,6 +948,12 @@ class App(ttk.Frame):
             self.set_status("Stopped: " + str(msg.get("detail", "unknown error")))
 
     def on_close(self):
+        self._closing = True          # stop rescheduling into a dead window
+        if self._drain_id is not None:
+            try:
+                self.root.after_cancel(self._drain_id)
+            except Exception:
+                pass
         if self.typist and self.typist.is_alive():
             self.typist.stop_flag.set()
             self.typist.join(timeout=1.0)
